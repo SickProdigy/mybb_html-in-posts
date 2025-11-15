@@ -38,6 +38,7 @@ No support will be provided via other channels.
 
 This plugin is based on or forked from:  
 [Original HTML in Posts MyBB Plugin](https://community.mybb.com/mods.php?action=view&pid=1234)  
+By: Diogo Parrinha
 
 ---
 
