@@ -14,6 +14,7 @@ This plugin adds the possibility to use HTML in posts.
 ## Upgrade
 
 **From 1.5/1.6 to 1.7:**
+
 - Upload contents of the `Upload` folder to the root of your MyBB installation.
 
 ## Support
@@ -23,5 +24,5 @@ This plugin is **NOT maintained** and **NO support** is officially given by the 
 
 ---
 
-© 2021 Diogo Parrinha  
+© 2021 Diogo Parrinha
 All rights reserved.
