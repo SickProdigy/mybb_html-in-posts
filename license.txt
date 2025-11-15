@@ -1,4 +1,4 @@
-Copyright (C) 2021  Diogo Parrinha
+Copyright (C) 2025 SickProdigy
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
