@@ -66,7 +66,12 @@ function htmlposts_activate()
 		'disporder' => 100,
 		'isdefault' => 0
 	);
-	$gid = $db->insert_query("settinggroups", $insertarray);
+    $db->insert_query("settinggroups", $insertarray);
+    $gid = $db->insert_id();
+    
+    if (!$gid || !is_numeric($gid)) {
+        die("Failed to create settings group. $gid is not valid.");
+    }
 
 	// add settings
 	$setting = array(
