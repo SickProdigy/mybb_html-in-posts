@@ -75,7 +75,6 @@ function htmlposts_activate()
 
 	// add settings
 	$setting = array(
-		"sid"			=> NULL,
 		"name"			=> "htmlposts_groups",
 		"title"			=> "Allowed Groups",
 		"description"	=> "Enter the group IDs that can use HTML in posts. (separated by a comma, can be blank to allow all)",
@@ -88,7 +87,6 @@ function htmlposts_activate()
 	$db->insert_query("settings", $setting);
 
 	$setting = array(
-		"sid"			=> NULL,
 		"name"			=> "htmlposts_uids",
 		"title"			=> "Allowed Users",
 		"description"	=> "Enter the user IDs of the users that can use HTML in posts. (separated by a comma, leave blank to disable this feature)<br />Note: overrides groups setting.",
@@ -101,7 +99,6 @@ function htmlposts_activate()
 	$db->insert_query("settings", $setting);
 
 	$setting = array(
-		"sid"			=> NULL,
 		"name"			=> "htmlposts_forums",
 		"title"			=> "Affected Forums",
 		"description"	=> "Enter the forum IDs that are affected by this plugin. (separated by a comma, can be blank if you want to affect all forums)",
