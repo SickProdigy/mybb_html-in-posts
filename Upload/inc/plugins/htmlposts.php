@@ -63,7 +63,7 @@ function htmlposts_activate()
 		'disporder' => 100,
 		'isdefault' => 0
 	);
-	$gid = $db->insert_query("settinggroups", $insertarray);
+	$gid = $db->insert_query($db->table_prefix."settinggroups", $insertarray);
 
 	// add settings
 	$setting = array(
@@ -77,7 +77,7 @@ function htmlposts_activate()
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	$db->insert_query($db->table_prefix."settings", $setting);
 
 	$setting = array(
 		"sid"			=> NULL,
@@ -90,7 +90,7 @@ function htmlposts_activate()
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	$db->insert_query($db->table_prefix."settings", $setting);
 
 	$setting = array(
 		"sid"			=> NULL,
@@ -103,7 +103,7 @@ function htmlposts_activate()
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	$db->insert_query($db->table_prefix."settings", $setting);
 
 	rebuild_settings();
 }
@@ -114,10 +114,10 @@ function htmlposts_deactivate()
 	global $db, $mybb;
 
 	// delete settings group
-	$db->delete_query("settinggroups", "name = 'htmlposts'");
+	$db->delete_query($db->table_prefix."settinggroups", "name = 'htmlposts'");
 
 	// remove settings
-	$db->delete_query('settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
+	$db->delete_query($db->table_prefix.'settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
 
 	rebuild_settings();
 }
@@ -263,7 +263,7 @@ function htmlposts_parse(&$message)
 		if(THIS_SCRIPT == 'portal.php' || (THIS_SCRIPT == 'newreply.php' && !isset($mypost['usergroup'])))
 		{
 			// Get usergroup and additionalgroups if we're in portal.php
-			$q = $db->simple_select('users', 'usergroup,additionalgroups', 'uid='.$mypost['uid']);
+			$q = $db->simple_select($db->table_prefix.'users', 'usergroup,additionalgroups', 'uid='.$mypost['uid']);
 			$data = $db->fetch_array($q);
 			$mypost['usergroup'] = $data['usergroup'];
 			$mypost['additionalgroups'] = $data['additionalgroups'];
