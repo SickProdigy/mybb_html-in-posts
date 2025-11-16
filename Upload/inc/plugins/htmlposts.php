@@ -146,6 +146,37 @@ function htmlposts_check_permissions($groups_comma, $user)
 		return true;
 }
 
+if (!class_exists("control_html"))
+{
+    class control_html
+    {
+        public $html_enabled;
+
+        function __construct()
+        {
+            global $parser;
+            $this->html_enabled = $parser->options['allow_html'];
+        }
+
+        function set_html($status)
+        {
+            $status = (int)$status;
+            if ($status != 0 && $status != 1) return false;
+
+            if ($status == 0 && $this->html_enabled == 1)
+                return false;
+
+            global $parser;
+            $parser->options['allow_html'] = $status;
+            global $parser_options;
+            if (!empty($parser_options))
+                $parser_options['allow_html'] = $status;
+
+            return true;
+        }
+    }
+}
+
 function htmlposts_parse(&$message)
 {
 	global $mybb, $db;
@@ -200,43 +231,6 @@ function htmlposts_parse(&$message)
 	{
 		return; // unfortunately we cannot proceed without a $parser object created
 	}
-
-	// Create a new class to control the parser options easily
-    if (!class_exists("control_html"))
-    {
-        class control_html
-        {
-            public $html_enabled;
-    
-            function __construct()
-            {
-                // Is it enabled already? Save it in a var to later disallow disabling
-                global $parser;
-                $this->html_enabled = $parser->options['allow_html'];
-            }
-    
-            function set_html($status)
-            {
-                $status = (int)$status;
-                if ($status != 0 && $status != 1) return false;
-    
-                // if we're trying to disable it but it's enabled by default, disallow the action
-                if ($status == 0 && $this->html_enabled == 1)
-                    return false;
-    
-                global $parser;
-    
-                // Set to desired status
-                $parser->options['allow_html'] = $status;
-                // for previewing posts
-                global $parser_options;
-                if (!empty($parser_options))
-                    $parser_options['allow_html'] = $status;
-    
-                return true;
-            }
-        }
-    }
 
 	// Create object if it doesn't exist
 	if (!is_object($control_html))
