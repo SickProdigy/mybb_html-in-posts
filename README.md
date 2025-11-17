@@ -37,7 +37,7 @@ No support will be provided via other channels.
 ## Forked From
 
 This plugin is based on or forked from:  
-[Original HTML in Posts MyBB Plugin](https://community.mybb.com/mods.php?action=view&pid=1234)  
+[Original HTML in Posts MyBB Plugin](https://community.mybb.com/mods.php?action=view&pid=16)  
 By: Diogo Parrinha
 
 ---
