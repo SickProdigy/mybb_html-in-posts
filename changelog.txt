@@ -1,3 +1,9 @@
+v1.8
+* Fixed plugin activation issues with MyBB 1.8 and PHP 7/8.
+* Corrected settings table insert logic (no manual 'sid' field).
+* Updated code to use modern PHP constructor (__construct). Must have PHP 5+
+
+
  v1.7
 * Fixed bug where HTML would not show in portal.
 * Fixed bug where HTML would not show in thread review within the new reply page.
