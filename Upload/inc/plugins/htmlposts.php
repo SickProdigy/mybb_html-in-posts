@@ -1,12 +1,9 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('log_errors', 1);
-error_reporting(E_ALL);
 /***************************************************************************
  *
  *  HTML in Posts plugin (/inc/plugins/htmlposts.php)
- *  Author: Diogo Parrinha
- *  Copyright: © 2021 Diogo Parrinha
+ *  Author: Diogo Parrinha and SickProdigy
+ *  Copyright: © 2025 SickGaming.net
  *
  *
  *  License: license.txt
