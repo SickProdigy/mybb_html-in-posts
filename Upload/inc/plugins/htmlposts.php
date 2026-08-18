@@ -44,7 +44,7 @@ function htmlposts_info()
 		"name"			=> "HTML in Posts",
 		"description"	=> "This plugin adds the possibility to use HTML in posts.",
 		"author"		=> "Diogo Parrinha and SickGaming.net",
-		"version"		=> "1.8",
+		"version"		=> "1.9",
 		"guid" 			=> "1e7c24cc5352de0fbc1e7be40ef1ad60",
 		"compatibility"	=> "18*"
 	);
@@ -131,7 +131,9 @@ function htmlposts_check_permissions($groups_comma, $user)
 		return false;
 
 	$groups = explode(",", $groups_comma);
-	$add_groups = explode(",", $user['additionalgroups']);
+	$add_groups = empty($user['additionalgroups'])
+		? array()
+		: explode(",", $user['additionalgroups']);
 
 	if (!in_array($user['usergroup'], $groups)) { // primary user group not allowed
 		// check additional groups

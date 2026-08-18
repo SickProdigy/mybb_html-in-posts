@@ -1,3 +1,7 @@
+v1.9
+* Fixed PHP deprecation warnings when users have no additional groups.
+* Prevented those warnings from corrupting RSS and other structured responses.
+
 v1.8
 * Fixed plugin activation issues with MyBB 1.8 and PHP 7/8.
 * Corrected settings table insert logic (no manual 'sid' field).
