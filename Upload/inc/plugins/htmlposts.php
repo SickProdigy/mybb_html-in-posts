@@ -3,7 +3,7 @@
  *
  *  HTML in Posts plugin (/inc/plugins/htmlposts.php)
  *  Author: Diogo Parrinha and SickProdigy
- *  Copyright: © 2025 SickGaming.net
+ *  Copyright: © 2026 SickProdigy
  *
  *
  *  License: license.txt
@@ -43,7 +43,7 @@ function htmlposts_info()
 	return array(
 		"name"			=> "HTML in Posts",
 		"description"	=> "This plugin adds the possibility to use HTML in posts.",
-		"author"		=> "Diogo Parrinha and SickGaming.net",
+		"author"		=> "Diogo Parrinha and SickProdigy",
 		"version"		=> "1.9",
 		"guid" 			=> "1e7c24cc5352de0fbc1e7be40ef1ad60",
 		"compatibility"	=> "18*"
