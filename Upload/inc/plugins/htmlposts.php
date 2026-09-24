@@ -61,7 +61,7 @@ function htmlposts_info()
 
 function htmlposts_install()
 {
-	htmlposts_prepare_schema();
+	htmlposts_ensure_schema();
 }
 
 function htmlposts_is_installed()
@@ -91,7 +91,7 @@ function htmlposts_ensure_schema()
 
 	if($db->field_exists('htmlposts_authorized', 'posts'))
 	{
-		return false;
+		return;
 	}
 
 	if($db->type == 'pgsql')
@@ -108,101 +108,6 @@ function htmlposts_ensure_schema()
 	}
 
 	$db->add_column('posts', 'htmlposts_authorized', $type);
-	return true;
-}
-
-function htmlposts_has_legacy_settings()
-{
-	global $db;
-	$query = $db->simple_select(
-		'settings',
-		'sid',
-		"name = 'htmlposts_groups'",
-		array('limit' => 1)
-	);
-
-	return (bool)$db->fetch_array($query);
-}
-
-function htmlposts_prepare_schema()
-{
-	$migrate_existing_posts = htmlposts_has_legacy_settings();
-	$schema_added = htmlposts_ensure_schema();
-
-	if($schema_added && $migrate_existing_posts)
-	{
-		htmlposts_migrate_existing_authorizations();
-	}
-}
-
-function htmlposts_migrate_existing_authorizations()
-{
-	global $db, $mybb;
-
-	$forum_setting = isset($mybb->settings['htmlposts_forums'])
-		? trim((string)$mybb->settings['htmlposts_forums'])
-		: '';
-	if($forum_setting == '')
-	{
-		return;
-	}
-
-	$where_parts = array();
-	if($forum_setting != '-1')
-	{
-		$forums = htmlposts_parse_id_list($forum_setting);
-		if(empty($forums))
-		{
-			return;
-		}
-		$where_parts[] = 'fid IN ('.implode(',', $forums).')';
-	}
-
-	$group_setting = isset($mybb->settings['htmlposts_groups'])
-		? trim((string)$mybb->settings['htmlposts_groups'])
-		: '';
-	if($group_setting == '-1')
-	{
-		$db->update_query(
-			'posts',
-			array('htmlposts_authorized' => 1),
-			implode(' AND ', $where_parts)
-		);
-		return;
-	}
-
-	$authorized_uids = isset($mybb->settings['htmlposts_uids'])
-		? htmlposts_parse_id_list($mybb->settings['htmlposts_uids'])
-		: array();
-	$allowed_groups = htmlposts_parse_id_list($group_setting);
-
-	if(!empty($allowed_groups))
-	{
-		$query = $db->simple_select('users', 'uid,usergroup,additionalgroups');
-		while($user = $db->fetch_array($query))
-		{
-			if(htmlposts_check_permissions($allowed_groups, $user))
-			{
-				$authorized_uids[(int)$user['uid']] = (int)$user['uid'];
-			}
-		}
-	}
-
-	if(empty($authorized_uids))
-	{
-		return;
-	}
-
-	foreach(array_chunk($authorized_uids, 500, true) as $uid_chunk)
-	{
-		$chunk_where = $where_parts;
-		$chunk_where[] = 'uid IN ('.implode(',', $uid_chunk).')';
-		$db->update_query(
-			'posts',
-			array('htmlposts_authorized' => 1),
-			implode(' AND ', $chunk_where)
-		);
-	}
 }
 
 function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
@@ -236,7 +141,7 @@ function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
 function htmlposts_activate()
 {
 	global $db;
-	htmlposts_prepare_schema();
+	htmlposts_ensure_schema();
 
 	// create settings group
 	$query = $db->simple_select('settinggroups', 'gid', "name = 'htmlposts'", array('limit' => 1));
