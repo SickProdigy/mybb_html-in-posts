@@ -84,6 +84,18 @@ $mybb->user = array(
 
 require dirname(__DIR__).'/Upload/inc/plugins/htmlposts.php';
 
+$quoted_post = array(
+	'message' => '<script>alert(1)</script><img src=x onerror=alert(2)><!-- hidden -->[b]safe MyCode[/b]&lt;already escaped&gt;',
+);
+htmlposts_escape_quoted_html($quoted_post);
+htmlposts_test_assert(
+	$quoted_post['message'] === '&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;&lt;!-- hidden --&gt;[b]safe MyCode[/b]&lt;already escaped&gt;',
+	'quoted HTML is inert while MyCode and existing entities are preserved'
+);
+$escaped_quote = $quoted_post['message'];
+htmlposts_escape_quoted_html($quoted_post);
+htmlposts_test_assert($quoted_post['message'] === $escaped_quote, 'quote escaping is idempotent for multiquote processing');
+
 $normalized_ids = htmlposts_parse_id_list('4, 6, 4, , 0, -2, bad, 7x');
 htmlposts_test_assert($normalized_ids === array(4 => 4, 6 => 6), 'ID settings are normalized and invalid values are ignored');
 

@@ -1,4 +1,5 @@
 Unreleased
+* Prevented quoted raw HTML from inheriting the replying user's authorization.
 * Persisted HTML authorization per post so later group changes cannot activate old raw HTML.
 * Re-evaluate authorization when post content is edited, including quick edits and merged replies.
 * Added safe schema install, upgrade, deactivation, and uninstall handling.

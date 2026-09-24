@@ -42,6 +42,7 @@ $plugins->add_hook('datahandler_post_insert_post', 'htmlposts_authorize_insert')
 $plugins->add_hook('datahandler_post_insert_thread_post', 'htmlposts_authorize_insert');
 $plugins->add_hook('datahandler_post_update', 'htmlposts_authorize_update');
 $plugins->add_hook('datahandler_post_insert_merge', 'htmlposts_authorize_merge');
+$plugins->add_hook('parse_quoted_message', 'htmlposts_escape_quoted_html');
 
 function htmlposts_info()
 {
@@ -405,6 +406,24 @@ function htmlposts_authorize_merge(&$datahandler)
 
 	$authorized = (int)htmlposts_user_can_use_html($mybb->user, $datahandler->data['fid']);
 	$db->update_query('posts', array('htmlposts_authorized' => $authorized), 'pid='.(int)$datahandler->pid);
+}
+
+function htmlposts_escape_quoted_html(&$quoted_post)
+{
+	if(!is_array($quoted_post) || !isset($quoted_post['message']))
+	{
+		return $quoted_post;
+	}
+
+	// MyBB copies the stored message into a new reply before this hook runs.
+	// Keep quoted HTML inert so it cannot inherit the replier's authorization.
+	$quoted_post['message'] = str_replace(
+		array('<', '>'),
+		array('&lt;', '&gt;'),
+		$quoted_post['message']
+	);
+
+	return $quoted_post;
 }
 
 // checks permissions for a certain user
