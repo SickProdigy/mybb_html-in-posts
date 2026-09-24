@@ -410,13 +410,35 @@ function htmlposts_authorize_merge(&$datahandler)
 
 function htmlposts_escape_quoted_html(&$quoted_post)
 {
-	if(!is_array($quoted_post) || !isset($quoted_post['message']))
+	global $db;
+	static $source_authorization_cache = array();
+
+	if(!is_array($quoted_post) || !isset($quoted_post['message']) || empty($quoted_post['pid']))
+	{
+		return $quoted_post;
+	}
+
+	$pid = (int)$quoted_post['pid'];
+	if(!isset($source_authorization_cache[$pid]))
+	{
+		$query = $db->simple_select(
+			'posts',
+			'fid,uid,htmlposts_authorized',
+			'pid='.$pid,
+			array('limit' => 1)
+		);
+		$source_post = $db->fetch_array($query);
+		$source_authorization_cache[$pid] = !empty($source_post)
+			&& htmlposts_saved_post_can_use_html($source_post);
+	}
+
+	if($source_authorization_cache[$pid])
 	{
 		return $quoted_post;
 	}
 
 	// MyBB copies the stored message into a new reply before this hook runs.
-	// Keep quoted HTML inert so it cannot inherit the replier's authorization.
+	// Keep unauthorized source HTML inert so it cannot inherit the replier's authorization.
 	$quoted_post['message'] = str_replace(
 		array('<', '>'),
 		array('&lt;', '&gt;'),

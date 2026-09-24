@@ -18,7 +18,9 @@ class HtmlPostsTestDb
 {
 	public $updates = array();
 	public $users = array();
+	public $posts = array();
 	public $user_queries = 0;
+	public $post_queries = 0;
 
 	function field_exists($field, $table)
 	{
@@ -36,12 +38,23 @@ class HtmlPostsTestDb
 		{
 			++$this->user_queries;
 		}
-		return $where;
+		else if($table == 'posts')
+		{
+			++$this->post_queries;
+		}
+		return array('table' => $table, 'where' => $where);
 	}
 
 	function fetch_array($query)
 	{
-		preg_match('/uid=(\d+)/', $query, $matches);
+		if($query['table'] == 'posts')
+		{
+			preg_match('/pid=(\d+)/', $query['where'], $matches);
+			$pid = isset($matches[1]) ? (int)$matches[1] : 0;
+			return isset($this->posts[$pid]) ? $this->posts[$pid] : array();
+		}
+
+		preg_match('/uid=(\d+)/', $query['where'], $matches);
 		$uid = isset($matches[1]) ? (int)$matches[1] : 0;
 		return isset($this->users[$uid]) ? $this->users[$uid] : array();
 	}
@@ -84,17 +97,34 @@ $mybb->user = array(
 
 require dirname(__DIR__).'/Upload/inc/plugins/htmlposts.php';
 
-$quoted_post = array(
+$db->users[40] = array('usergroup' => 4, 'additionalgroups' => '');
+$db->users[41] = array('usergroup' => 2, 'additionalgroups' => '');
+$db->posts[40] = array('pid' => 40, 'fid' => 2, 'uid' => 40, 'htmlposts_authorized' => 1);
+$db->posts[41] = array('pid' => 41, 'fid' => 2, 'uid' => 41, 'htmlposts_authorized' => 0);
+
+$authorized_quote = array(
+	'pid' => 40,
+	'message' => '<div>authorized source HTML</div>',
+);
+htmlposts_escape_quoted_html($authorized_quote);
+htmlposts_test_assert(
+	$authorized_quote['message'] === '<div>authorized source HTML</div>',
+	'authorized source HTML remains unchanged when quoted'
+);
+
+$unauthorized_quote = array(
+	'pid' => 41,
 	'message' => '<script>alert(1)</script><img src=x onerror=alert(2)><!-- hidden -->[b]safe MyCode[/b]&lt;already escaped&gt;',
 );
-htmlposts_escape_quoted_html($quoted_post);
+htmlposts_escape_quoted_html($unauthorized_quote);
 htmlposts_test_assert(
-	$quoted_post['message'] === '&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;&lt;!-- hidden --&gt;[b]safe MyCode[/b]&lt;already escaped&gt;',
-	'quoted HTML is inert while MyCode and existing entities are preserved'
+	$unauthorized_quote['message'] === '&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;&lt;!-- hidden --&gt;[b]safe MyCode[/b]&lt;already escaped&gt;',
+	'unauthorized source HTML is inert while MyCode and existing entities are preserved'
 );
-$escaped_quote = $quoted_post['message'];
-htmlposts_escape_quoted_html($quoted_post);
-htmlposts_test_assert($quoted_post['message'] === $escaped_quote, 'quote escaping is idempotent for multiquote processing');
+$escaped_quote = $unauthorized_quote['message'];
+htmlposts_escape_quoted_html($unauthorized_quote);
+htmlposts_test_assert($unauthorized_quote['message'] === $escaped_quote, 'quote escaping is idempotent for multiquote processing');
+htmlposts_test_assert($db->post_queries === 2, 'quoted source authorization is queried once per post');
 
 $normalized_ids = htmlposts_parse_id_list('4, 6, 4, , 0, -2, bad, 7x');
 htmlposts_test_assert($normalized_ids === array(4 => 4, 6 => 6), 'ID settings are normalized and invalid values are ignored');
@@ -142,6 +172,7 @@ htmlposts_test_assert($parser->options['allow_html'] === 0, 'current permission 
 htmlposts_restore_parser_options($message);
 
 $db->users[20] = array('usergroup' => 4, 'additionalgroups' => '');
+$db->user_queries = 0;
 $first_post = array('pid' => 2, 'fid' => 2, 'uid' => 20, 'htmlposts_authorized' => 1);
 $second_post = array('pid' => 3, 'fid' => 2, 'uid' => 20, 'htmlposts_authorized' => 1);
 htmlposts_test_assert(htmlposts_saved_post_can_use_html($first_post), 'fallback author lookup authorizes the first post');
