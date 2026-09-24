@@ -70,11 +70,6 @@ function htmlposts_uninstall()
 {
 	global $db;
 
-	if($db->field_exists('htmlposts_authorized', 'posts'))
-	{
-		$db->drop_column('posts', 'htmlposts_authorized');
-	}
-
 	$db->delete_query("settinggroups", "name = 'htmlposts'");
 	$db->delete_query('settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
 	rebuild_settings();
@@ -111,11 +106,6 @@ function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
 function htmlposts_activate()
 {
 	global $db;
-
-	if($db->field_exists('htmlposts_authorized', 'posts'))
-	{
-		$db->drop_column('posts', 'htmlposts_authorized');
-	}
 
 	// create settings group
 	$query = $db->simple_select('settinggroups', 'gid', "name = 'htmlposts'", array('limit' => 1));
