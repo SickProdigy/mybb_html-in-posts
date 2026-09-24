@@ -23,7 +23,8 @@ The security regression suite is tested on PHP 8.5.9. Plugin hook compatibility 
 **From 1.9:**
 
 - Upload the contents of the `Upload` folder, then deactivate and reactivate the plugin once to add the per-post authorization field. Settings are preserved during deactivation.
-- Existing posts are migrated as unauthorized and remain escaped. To enable HTML in an existing post, an authorized user must edit and save that post again.
+- Existing posts that are eligible under the configured users, groups, and forums are authorized once during the upgrade, preserving currently rendered HTML. Other existing posts remain escaped.
+- Fresh installations do not authorize unrelated historical posts.
 - Back up the database before upgrading, as with any plugin that changes the database schema.
 
 **From 1.5/1.6 to 1.7:**
