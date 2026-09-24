@@ -637,14 +637,17 @@ if (!class_exists("control_html"))
             return true;
         }
 
-        function restore_html()
+        function restore_html($restore_parser = true)
         {
             if (empty($this->html_stack)) return false;
 
             $status = array_pop($this->html_stack);
 
-            global $parser;
-            $parser->options['allow_html'] = $status;
+            if($restore_parser)
+            {
+                global $parser;
+                $parser->options['allow_html'] = $status;
+            }
             global $parser_options;
             if (!empty($parser_options))
                 $parser_options['allow_html'] = $status;
@@ -660,7 +663,9 @@ function htmlposts_restore_parser_options($message)
 
 	if(is_object($control_html))
 	{
-		$control_html->restore_html();
+		// MyBB validates output after this hook and must still see the current
+		// post's HTML authorization. The next parse resets parser options itself.
+		$control_html->restore_html(false);
 	}
 
 	return $message;

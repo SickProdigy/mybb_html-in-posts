@@ -182,8 +182,10 @@ $post['htmlposts_authorized'] = 1;
 htmlposts_parse($message);
 htmlposts_test_assert($parser->options['allow_html'] === 1, 'stored authorization enables HTML');
 htmlposts_restore_parser_options($message);
-htmlposts_test_assert($parser->options['allow_html'] === 0, 'parser state is restored after an authorized post');
+htmlposts_test_assert($parser->options['allow_html'] === 1, 'authorization remains active through final output validation');
+htmlposts_test_assert($parser_options['allow_html'] === 0, 'shared options are restored for the next post');
 
+$parser->options = $parser_options;
 $mybb->input['previewpost'] = 1;
 $fid = 2;
 htmlposts_parse($message);
@@ -191,6 +193,7 @@ htmlposts_test_assert($parser->options['allow_html'] === 1, 'authorized preview 
 htmlposts_restore_parser_options($message);
 $mybb->input = array();
 
+$parser->options = $parser_options;
 $post['usergroup'] = 2;
 htmlposts_parse($message);
 htmlposts_test_assert($parser->options['allow_html'] === 0, 'current permission revocation disables stored HTML');
