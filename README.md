@@ -43,7 +43,7 @@ The security regression suite is tested on PHP 8.5.9. Plugin hook compatibility 
 
 This plugin is **partially maintained**.  
 Support is available only for issues reported at:  
-[https://gitea.rcs1.top/sickprodigy/mybb_html-in-posts/issues](https://gitea.rcs1.top/sickprodigy/mybb_html-in-posts/issues)
+[https://github.com/sickprodigy/mybb_html-in-posts/issues](https://github.com/sickprodigy/mybb_html-in-posts/issues)
 
 No support will be provided via other channels.
 
