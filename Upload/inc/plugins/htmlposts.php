@@ -37,6 +37,11 @@ if(!defined("IN_MYBB"))
 
 // add hooks
 $plugins->add_hook('parse_message_start', 'htmlposts_parse');
+$plugins->add_hook('parse_message_end', 'htmlposts_restore_parser_options');
+$plugins->add_hook('datahandler_post_insert_post', 'htmlposts_authorize_insert');
+$plugins->add_hook('datahandler_post_insert_thread_post', 'htmlposts_authorize_insert');
+$plugins->add_hook('datahandler_post_update', 'htmlposts_authorize_update');
+$plugins->add_hook('datahandler_post_insert_merge', 'htmlposts_authorize_merge');
 
 function htmlposts_info()
 {
@@ -53,61 +58,148 @@ function htmlposts_info()
 }
 
 
+function htmlposts_install()
+{
+	htmlposts_ensure_schema();
+}
+
+function htmlposts_is_installed()
+{
+	global $db;
+
+	return $db->field_exists('htmlposts_authorized', 'posts');
+}
+
+function htmlposts_uninstall()
+{
+	global $db;
+
+	if($db->field_exists('htmlposts_authorized', 'posts'))
+	{
+		$db->drop_column('posts', 'htmlposts_authorized');
+	}
+
+	$db->delete_query("settinggroups", "name = 'htmlposts'");
+	$db->delete_query('settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
+	rebuild_settings();
+}
+
+function htmlposts_ensure_schema()
+{
+	global $db;
+
+	if($db->field_exists('htmlposts_authorized', 'posts'))
+	{
+		return;
+	}
+
+	if($db->type == 'pgsql')
+	{
+		$type = "smallint NOT NULL default '0'";
+	}
+	else if($db->type == 'sqlite')
+	{
+		$type = "integer NOT NULL default '0'";
+	}
+	else
+	{
+		$type = "tinyint(1) unsigned NOT NULL default '0'";
+	}
+
+	$db->add_column('posts', 'htmlposts_authorized', $type);
+}
+
+function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
+{
+	global $db;
+
+	$query = $db->simple_select(
+		'settings',
+		'sid,value',
+		"name = '".$db->escape_string($setting['name'])."'",
+		array('limit' => 1)
+	);
+	$existing = $db->fetch_array($query);
+
+	if(!$existing)
+	{
+		$db->insert_query('settings', $setting);
+		return;
+	}
+
+	$update = $setting;
+	unset($update['name'], $update['value']);
+	if($migrate_blank_to_all && $existing['value'] === '')
+	{
+		$update['value'] = '-1';
+	}
+
+	$db->update_query('settings', $update, 'sid='.(int)$existing['sid']);
+}
+
 function htmlposts_activate()
 {
-	global $db, $lang;
+	global $db;
+	htmlposts_ensure_schema();
 
 	// create settings group
-	$insertarray = array(
-		'name' => 'htmlposts',
-		'title' => 'HTML in Posts',
-		'description' => "Settings for HTML in Posts plugin.",
-		'disporder' => 100,
-		'isdefault' => 0
-	);
-    $db->insert_query("settinggroups", $insertarray);
-    $gid = $db->insert_id();
-    
-    if (!$gid || !is_numeric($gid)) {
-        die("Failed to create settings group. $gid is not valid.");
-    }
+	$query = $db->simple_select('settinggroups', 'gid', "name = 'htmlposts'", array('limit' => 1));
+	$gid = (int)$db->fetch_field($query, 'gid');
+
+	if(!$gid)
+	{
+		$insertarray = array(
+			'name' => 'htmlposts',
+			'title' => 'HTML in Posts',
+			'description' => "Settings for HTML in Posts plugin.",
+			'disporder' => 100,
+			'isdefault' => 0
+		);
+		$db->insert_query("settinggroups", $insertarray);
+		$gid = (int)$db->insert_id();
+	}
+
+	if(!$gid)
+	{
+		die("Failed to create the HTML in Posts settings group.");
+	}
 
 	// add settings
 	$setting = array(
 		"name"			=> "htmlposts_groups",
 		"title"			=> "Allowed Groups",
-		"description"	=> "Enter the group IDs that can use HTML in posts. (separated by a comma, can be blank to allow all)",
-		"optionscode"	=> "text",
+		"description"	=> "Select the groups that may use HTML. Choose All Groups to allow every group, or None to allow only users listed below.",
+		"optionscode"	=> "groupselect",
 		"value"			=> '4',
 		"disporder"		=> 1,
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	htmlposts_upsert_setting($setting, true);
 
 	$setting = array(
 		"name"			=> "htmlposts_uids",
 		"title"			=> "Allowed Users",
-		"description"	=> "Enter the user IDs of the users that can use HTML in posts. (separated by a comma, leave blank to disable this feature)<br />Note: overrides groups setting.",
+		"description"	=> "Enter numeric user IDs separated by commas. The numeric ID appears as uid in the profile URL. Listed users are allowed even when their group is not selected; leave blank for no user overrides.",
 		"optionscode"	=> "text",
 		"value"			=> "",
 		"disporder"		=> 2,
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	htmlposts_upsert_setting($setting);
 
 	$setting = array(
 		"name"			=> "htmlposts_forums",
 		"title"			=> "Affected Forums",
-		"description"	=> "Enter the forum IDs that are affected by this plugin. (separated by a comma, can be blank if you want to affect all forums)",
-		"optionscode"	=> "text",
-		"value"			=> "",
+		"description"	=> "Select the forums where this plugin applies. Choose All Forums to affect every forum, or None to disable the plugin in all forums.",
+		"optionscode"	=> "forumselect",
+		"value"			=> "-1",
 		"disporder"		=> 3,
 		"gid"			=> $gid
 	);
 
-	$db->insert_query("settings", $setting);
+	htmlposts_upsert_setting($setting, true);
 
 	rebuild_settings();
 }
@@ -115,41 +207,235 @@ function htmlposts_activate()
 
 function htmlposts_deactivate()
 {
+	// Keep settings and per-post authorization state for later reactivation.
+}
+
+function htmlposts_parse_id_list($ids)
+{
+	static $parsed_id_cache = array();
+	$cache_key = (string)$ids;
+
+	if(isset($parsed_id_cache[$cache_key]))
+	{
+		return $parsed_id_cache[$cache_key];
+	}
+
+	$parsed_ids = array();
+
+	if($cache_key == '')
+	{
+		$parsed_id_cache[$cache_key] = $parsed_ids;
+		return $parsed_id_cache[$cache_key];
+	}
+
+	foreach(explode(',', $cache_key) as $id)
+	{
+		$id = trim($id);
+		if(!preg_match('/^[0-9]+$/D', $id))
+		{
+			continue;
+		}
+
+		$id = (int)$id;
+		if($id > 0)
+		{
+			$parsed_ids[$id] = $id;
+		}
+	}
+
+	$parsed_id_cache[$cache_key] = $parsed_ids;
+	return $parsed_id_cache[$cache_key];
+}
+
+function htmlposts_get_author_groups(&$post)
+{
+	global $db;
+	static $author_groups_cache = array();
+
+	if(isset($post['usergroup']))
+	{
+		return true;
+	}
+
+	if(empty($post['uid']))
+	{
+		return false;
+	}
+
+	$uid = (int)$post['uid'];
+	if(isset($author_groups_cache[$uid]))
+	{
+		$post['usergroup'] = $author_groups_cache[$uid]['usergroup'];
+		$post['additionalgroups'] = $author_groups_cache[$uid]['additionalgroups'];
+		return true;
+	}
+
+	$query = $db->simple_select('users', 'usergroup,additionalgroups', 'uid='.$uid, array('limit' => 1));
+	$author_groups_cache[$uid] = $db->fetch_array($query);
+
+	if(empty($author_groups_cache[$uid]))
+	{
+		return false;
+	}
+
+	$post['usergroup'] = $author_groups_cache[$uid]['usergroup'];
+	$post['additionalgroups'] = $author_groups_cache[$uid]['additionalgroups'];
+	return true;
+}
+
+function htmlposts_user_can_use_html($user, $fid)
+{
+	global $mybb;
+	$uid = isset($user['uid']) ? (int)$user['uid'] : 0;
+	$forum_setting = trim((string)$mybb->settings['htmlposts_forums']);
+
+	if($forum_setting == '')
+	{
+		return false;
+	}
+
+	if($forum_setting != '-1')
+	{
+		$forums = htmlposts_parse_id_list($forum_setting);
+		if(!isset($forums[(int)$fid]))
+		{
+			return false;
+		}
+	}
+
+	if($mybb->settings['htmlposts_uids'] != '')
+	{
+		$uids = htmlposts_parse_id_list($mybb->settings['htmlposts_uids']);
+		if(isset($uids[$uid]))
+		{
+			return true;
+		}
+	}
+
+	$group_setting = trim((string)$mybb->settings['htmlposts_groups']);
+	if($group_setting == '-1')
+	{
+		return true;
+	}
+	if($group_setting == '')
+	{
+		return false;
+	}
+
+	return htmlposts_check_permissions($group_setting, $user);
+}
+
+function htmlposts_saved_post_can_use_html(&$post)
+{
+	global $mybb;
+
+	if(empty($post['htmlposts_authorized']))
+	{
+		return false;
+	}
+
+	if($mybb->settings['htmlposts_uids'] != '')
+	{
+		$uids = htmlposts_parse_id_list($mybb->settings['htmlposts_uids']);
+		if(isset($uids[(int)$post['uid']]))
+		{
+			return htmlposts_user_can_use_html($post, $post['fid']);
+		}
+	}
+
+	$group_setting = trim((string)$mybb->settings['htmlposts_groups']);
+	if($group_setting != '' && $group_setting != '-1' && !htmlposts_get_author_groups($post))
+	{
+		return false;
+	}
+
+	return htmlposts_user_can_use_html($post, $post['fid']);
+}
+
+function htmlposts_schema_ready()
+{
+	global $db;
+	static $ready;
+
+	if($ready === null)
+	{
+		$ready = $db->field_exists('htmlposts_authorized', 'posts');
+	}
+
+	return $ready;
+}
+
+function htmlposts_authorize_insert(&$datahandler)
+{
+	global $mybb;
+
+	if(!htmlposts_schema_ready())
+	{
+		return;
+	}
+
+	$authorized = (int)htmlposts_user_can_use_html($mybb->user, $datahandler->data['fid']);
+	$datahandler->post_insert_data['htmlposts_authorized'] = $authorized;
+	$datahandler->post_update_data['htmlposts_authorized'] = $authorized;
+}
+
+function htmlposts_authorize_update(&$datahandler)
+{
+	global $mybb;
+
+	if(!htmlposts_schema_ready() || !isset($datahandler->data['message']))
+	{
+		return;
+	}
+
+	$datahandler->post_update_data['htmlposts_authorized'] = (int)htmlposts_user_can_use_html(
+		$mybb->user,
+		$datahandler->data['fid']
+	);
+}
+
+function htmlposts_authorize_merge(&$datahandler)
+{
 	global $db, $mybb;
 
-	// delete settings group
-	$db->delete_query("settinggroups", "name = 'htmlposts'");
+	if(!htmlposts_schema_ready() || empty($datahandler->pid))
+	{
+		return;
+	}
 
-	// remove settings
-	$db->delete_query('settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
-
-	rebuild_settings();
+	$authorized = (int)htmlposts_user_can_use_html($mybb->user, $datahandler->data['fid']);
+	$db->update_query('posts', array('htmlposts_authorized' => $authorized), 'pid='.(int)$datahandler->pid);
 }
 
 // checks permissions for a certain user
-function htmlposts_check_permissions($groups_comma, $user)
+function htmlposts_check_permissions($groups, $user)
 {
-	if ($groups_comma == '' || empty($user))
-		return false;
-
-	$groups = explode(",", $groups_comma);
-	$add_groups = empty($user['additionalgroups'])
-		? array()
-		: explode(",", $user['additionalgroups']);
-
-	if (!in_array($user['usergroup'], $groups)) { // primary user group not allowed
-		// check additional groups
-		if ($add_groups) {
-			if (count(array_intersect($add_groups, $groups)) == 0)
-				return false;
-			else
-				return true;
-		}
-		else
-			return false;
+	if(!is_array($groups))
+	{
+		$groups = htmlposts_parse_id_list($groups);
 	}
-	else
-		return true;
+
+	if(empty($groups) || empty($user) || !isset($user['usergroup']))
+	{
+		return false;
+	}
+
+	$user_groups = array((int)$user['usergroup']);
+
+	if(!empty($user['additionalgroups']))
+	{
+		$user_groups = array_merge($user_groups, htmlposts_parse_id_list($user['additionalgroups']));
+	}
+
+	foreach($user_groups as $group)
+	{
+		if(isset($groups[(int)$group]))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 if (!class_exists("control_html"))
@@ -157,11 +443,18 @@ if (!class_exists("control_html"))
     class control_html
     {
         public $html_enabled;
+        public $html_stack = array();
 
         function __construct()
         {
             global $parser;
-            $this->html_enabled = $parser->options['allow_html'];
+            $this->html_enabled = isset($parser->options['allow_html']) ? (int)$parser->options['allow_html'] : 0;
+        }
+
+        function remember_html()
+        {
+            global $parser;
+            $this->html_stack[] = isset($parser->options['allow_html']) ? (int)$parser->options['allow_html'] : 0;
         }
 
         function set_html($status)
@@ -180,7 +473,34 @@ if (!class_exists("control_html"))
 
             return true;
         }
+
+        function restore_html()
+        {
+            if (empty($this->html_stack)) return false;
+
+            $status = array_pop($this->html_stack);
+
+            global $parser;
+            $parser->options['allow_html'] = $status;
+            global $parser_options;
+            if (!empty($parser_options))
+                $parser_options['allow_html'] = $status;
+
+            return true;
+        }
     }
+}
+
+function htmlposts_restore_parser_options($message)
+{
+	global $control_html;
+
+	if(is_object($control_html))
+	{
+		$control_html->restore_html();
+	}
+
+	return $message;
 }
 
 function htmlposts_parse(&$message)
@@ -204,7 +524,7 @@ function htmlposts_parse(&$message)
 	$previewpost = false;
 
 	// we're previewing a post
-	if ($mybb->input['previewpost'] && (THIS_SCRIPT == "newthread.php" || THIS_SCRIPT == "newreply.php" || THIS_SCRIPT == "editpost.php"))
+	if (!empty($mybb->input['previewpost']) && (THIS_SCRIPT == "newthread.php" || THIS_SCRIPT == "newreply.php" || THIS_SCRIPT == "editpost.php"))
 	{
 		if (THIS_SCRIPT != "editpost.php")
 		{
@@ -223,11 +543,13 @@ function htmlposts_parse(&$message)
 		$previewpost = true;
 	}
 
-	// if not blank, check if we're in a forum that's affected
-	if ($mybb->settings['htmlposts_forums'] != '')
+	$forum_setting = trim((string)$mybb->settings['htmlposts_forums']);
+	if($forum_setting == '')
+		return;
+	if($forum_setting != '-1')
 	{
-		$forums = explode(",", trim($mybb->settings['htmlposts_forums']));
-		if (!in_array($mypost['fid'], $forums))
+		$forums = htmlposts_parse_id_list($forum_setting);
+		if(!isset($forums[(int)$mypost['fid']]))
 			return;
 	}
 
@@ -242,39 +564,16 @@ function htmlposts_parse(&$message)
 	if (!is_object($control_html))
 		$control_html = new control_html();
 
-	$override = false;
-	// is the post author allowed to have HTML in posts?
-	if($mybb->settings['htmlposts_uids'] != '')
-	{
-		$uids = explode(",", trim($mybb->settings['htmlposts_uids']));
-		if(!in_array($mypost['uid'], $uids))
-		{
-			// Disable HTML, or at least we'll try to, the function might refuse it
-			$control_html->set_html(0);
-		}
-		else
-			$override = true;
-	}
+	$control_html->remember_html();
 
-	// is the post author in a group allowed to post HTML?
-	if($override === false && $mybb->settings['htmlposts_groups'] != '' && THIS_SCRIPT != 'xmlhttp.php') // groups are not affected when editing the post via XMLHTTP (because it doesn't get user data and we are not going to run an extra query)
-	{
-		// Portal and Thread Review in New Reply don't have usergroup,additionalgroups in query
-		if(THIS_SCRIPT == 'portal.php' || (THIS_SCRIPT == 'newreply.php' && !isset($mypost['usergroup'])))
-		{
-			// Get usergroup and additionalgroups if we're in portal.php
-			$q = $db->simple_select('users', 'usergroup,additionalgroups', 'uid='.$mypost['uid']);
-			$data = $db->fetch_array($q);
-			$mypost['usergroup'] = $data['usergroup'];
-			$mypost['additionalgroups'] = $data['additionalgroups'];
-		}
+	$authorized = $previewpost
+		? htmlposts_user_can_use_html($mybb->user, $mypost['fid'])
+		: htmlposts_saved_post_can_use_html($mypost);
 
-		if(!htmlposts_check_permissions($mybb->settings['htmlposts_groups'], $mypost))
-		{
-			// Disable HTML, or at least we'll try to, the function might refuse it
-			$control_html->set_html(0);
-			return;
-		}
+	if(!$authorized)
+	{
+		$control_html->set_html(0);
+		return;
 	}
 
 	if(!isset($parser->options['filter_badwords']) && !$previewpost) // we're probably parsing a signature, this is not defined there
@@ -287,5 +586,3 @@ function htmlposts_parse(&$message)
 	// Enable HTML for allowed users :)
 	$control_html->set_html(1);
 }
-
-?>

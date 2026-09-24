@@ -1,3 +1,11 @@
+Unreleased
+* Persisted HTML authorization per post so later group changes cannot activate old raw HTML.
+* Re-evaluate authorization when post content is edited, including quick edits and merged replies.
+* Added safe schema install, upgrade, deactivation, and uninstall handling.
+* Normalized and cached configured IDs and fallback author group lookups.
+* Avoided undefined preview input warnings on PHP 8.
+* Replaced typed group and forum ID settings with MyBB's native selectors.
+
 v1.9
 * Fixed PHP deprecation warnings when users have no additional groups.
 * Prevented those warnings from corrupting RSS and other structured responses.
