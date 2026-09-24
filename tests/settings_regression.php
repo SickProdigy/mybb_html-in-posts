@@ -18,7 +18,7 @@ class HtmlPostsSettingsTestDb
 
 	function field_exists($field, $table)
 	{
-		return true;
+		return false;
 	}
 
 	function escape_string($value)

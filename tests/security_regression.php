@@ -124,8 +124,8 @@ require dirname(__DIR__).'/Upload/inc/plugins/htmlposts.php';
 
 $db->users[40] = array('usergroup' => 4, 'additionalgroups' => '');
 $db->users[41] = array('usergroup' => 2, 'additionalgroups' => '');
-$db->posts[40] = array('pid' => 40, 'fid' => 2, 'uid' => 40, 'usergroup' => 4, 'additionalgroups' => '', 'htmlposts_authorized' => 1);
-$db->posts[41] = array('pid' => 41, 'fid' => 2, 'uid' => 41, 'usergroup' => 2, 'additionalgroups' => '', 'htmlposts_authorized' => 0);
+$db->posts[40] = array('pid' => 40, 'fid' => 2, 'uid' => 40, 'usergroup' => 4, 'additionalgroups' => '');
+$db->posts[41] = array('pid' => 41, 'fid' => 2, 'uid' => 41, 'usergroup' => 2, 'additionalgroups' => '');
 
 $authorized_quote = array(
 	'pid' => 40,
@@ -164,26 +164,32 @@ $mybb->settings['htmlposts_forums'] = '';
 htmlposts_test_assert(!htmlposts_user_can_use_html($mybb->user, 2), 'the native None forum value disables all forums');
 $mybb->settings['htmlposts_forums'] = '-1';
 
-// A group change must not activate HTML in a post that was saved unauthorized.
+// Current permissions dynamically control all of an author's existing posts.
 $post = array(
 	'pid' => 1,
 	'fid' => 2,
 	'uid' => 10,
 	'usergroup' => 4,
 	'additionalgroups' => '',
-	'htmlposts_authorized' => 0,
 );
-$message = '<strong>unsafe</strong>';
+$message = '<strong>dynamic HTML</strong>';
 htmlposts_parse($message);
-htmlposts_test_assert($parser->options['allow_html'] === 0, 'stored denial survives a later allowed group');
-htmlposts_restore_parser_options($message);
-
-$post['htmlposts_authorized'] = 1;
-htmlposts_parse($message);
-htmlposts_test_assert($parser->options['allow_html'] === 1, 'stored authorization enables HTML');
+htmlposts_test_assert($parser->options['allow_html'] === 1, 'current allowed group enables existing HTML');
 htmlposts_restore_parser_options($message);
 htmlposts_test_assert($parser->options['allow_html'] === 1, 'authorization remains active through final output validation');
 htmlposts_test_assert($parser_options['allow_html'] === 0, 'shared options are restored for the next post');
+
+$parser->options = $parser_options;
+$post['usergroup'] = 2;
+htmlposts_parse($message);
+htmlposts_test_assert($parser->options['allow_html'] === 0, 'removing current permission disables existing HTML');
+htmlposts_restore_parser_options($message);
+
+$parser->options = $parser_options;
+$post['usergroup'] = 4;
+htmlposts_parse($message);
+htmlposts_test_assert($parser->options['allow_html'] === 1, 'restoring current permission re-enables existing HTML');
+htmlposts_restore_parser_options($message);
 
 $parser->options = $parser_options;
 $mybb->input['previewpost'] = 1;
@@ -193,44 +199,13 @@ htmlposts_test_assert($parser->options['allow_html'] === 1, 'authorized preview 
 htmlposts_restore_parser_options($message);
 $mybb->input = array();
 
-$parser->options = $parser_options;
-$post['usergroup'] = 2;
-htmlposts_parse($message);
-htmlposts_test_assert($parser->options['allow_html'] === 0, 'current permission revocation disables stored HTML');
-htmlposts_restore_parser_options($message);
-
 $db->users[20] = array('usergroup' => 4, 'additionalgroups' => '');
 $db->user_queries = 0;
-$first_post = array('pid' => 2, 'fid' => 2, 'uid' => 20, 'htmlposts_authorized' => 1);
-$second_post = array('pid' => 3, 'fid' => 2, 'uid' => 20, 'htmlposts_authorized' => 1);
-htmlposts_test_assert(htmlposts_saved_post_can_use_html($first_post), 'fallback author lookup authorizes the first post');
-htmlposts_test_assert(htmlposts_saved_post_can_use_html($second_post), 'cached author lookup authorizes the second post');
+$first_post = array('pid' => 2, 'fid' => 2, 'uid' => 20);
+$second_post = array('pid' => 3, 'fid' => 2, 'uid' => 20);
+htmlposts_test_assert(htmlposts_post_can_use_html($first_post), 'fallback author lookup authorizes the first post');
+htmlposts_test_assert(htmlposts_post_can_use_html($second_post), 'cached author lookup authorizes the second post');
 htmlposts_test_assert($db->user_queries === 1, 'an author is queried at most once per request');
-
-$handler = new stdClass();
-$handler->data = array('fid' => 2, 'message' => '<b>allowed</b>');
-$handler->post_insert_data = array();
-$handler->post_update_data = array();
-$handler->pid = 23;
-
-htmlposts_authorize_insert($handler);
-htmlposts_test_assert($handler->post_insert_data['htmlposts_authorized'] === 1, 'authorized insert is persisted');
-
-$mybb->user['usergroup'] = 2;
-$handler->post_update_data = array();
-htmlposts_authorize_update($handler);
-htmlposts_test_assert($handler->post_update_data['htmlposts_authorized'] === 0, 'message edit re-evaluates authorization');
-
-$handler->data = array('fid' => 2, 'subject' => 'subject only');
-$handler->post_update_data = array();
-htmlposts_authorize_update($handler);
-htmlposts_test_assert(!isset($handler->post_update_data['htmlposts_authorized']), 'subject-only edit preserves authorization');
-
-$handler->data = array('fid' => 2, 'message' => 'merged');
-htmlposts_authorize_merge($handler);
-$last_update = end($db->updates);
-htmlposts_test_assert($last_update[1]['htmlposts_authorized'] === 0, 'merged reply persists authorization');
-htmlposts_test_assert($last_update[2] === 'pid=23', 'merged reply updates the correct post');
 
 echo "security regression tests passed\n";
 restore_error_handler();

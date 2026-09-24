@@ -38,10 +38,6 @@ if(!defined("IN_MYBB"))
 // add hooks
 $plugins->add_hook('parse_message_start', 'htmlposts_parse');
 $plugins->add_hook('parse_message_end', 'htmlposts_restore_parser_options');
-$plugins->add_hook('datahandler_post_insert_post', 'htmlposts_authorize_insert');
-$plugins->add_hook('datahandler_post_insert_thread_post', 'htmlposts_authorize_insert');
-$plugins->add_hook('datahandler_post_update', 'htmlposts_authorize_update');
-$plugins->add_hook('datahandler_post_insert_merge', 'htmlposts_authorize_merge');
 $plugins->add_hook('parse_quoted_message', 'htmlposts_escape_quoted_html');
 
 function htmlposts_info()
@@ -61,14 +57,13 @@ function htmlposts_info()
 
 function htmlposts_install()
 {
-	htmlposts_ensure_schema();
 }
 
 function htmlposts_is_installed()
 {
 	global $db;
-
-	return $db->field_exists('htmlposts_authorized', 'posts');
+	$query = $db->simple_select('settinggroups', 'gid', "name = 'htmlposts'", array('limit' => 1));
+	return (bool)$db->fetch_field($query, 'gid');
 }
 
 function htmlposts_uninstall()
@@ -83,31 +78,6 @@ function htmlposts_uninstall()
 	$db->delete_query("settinggroups", "name = 'htmlposts'");
 	$db->delete_query('settings', 'name IN (\'htmlposts_groups\',\'htmlposts_uids\',\'htmlposts_forums\')');
 	rebuild_settings();
-}
-
-function htmlposts_ensure_schema()
-{
-	global $db;
-
-	if($db->field_exists('htmlposts_authorized', 'posts'))
-	{
-		return;
-	}
-
-	if($db->type == 'pgsql')
-	{
-		$type = "smallint NOT NULL default '0'";
-	}
-	else if($db->type == 'sqlite')
-	{
-		$type = "integer NOT NULL default '0'";
-	}
-	else
-	{
-		$type = "tinyint(1) unsigned NOT NULL default '0'";
-	}
-
-	$db->add_column('posts', 'htmlposts_authorized', $type);
 }
 
 function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
@@ -141,7 +111,11 @@ function htmlposts_upsert_setting($setting, $migrate_blank_to_all = false)
 function htmlposts_activate()
 {
 	global $db;
-	htmlposts_ensure_schema();
+
+	if($db->field_exists('htmlposts_authorized', 'posts'))
+	{
+		$db->drop_column('posts', 'htmlposts_authorized');
+	}
 
 	// create settings group
 	$query = $db->simple_select('settinggroups', 'gid', "name = 'htmlposts'", array('limit' => 1));
@@ -208,7 +182,7 @@ function htmlposts_activate()
 
 function htmlposts_deactivate()
 {
-	// Keep settings and per-post authorization state for later reactivation.
+	// Keep settings for later reactivation.
 }
 
 function htmlposts_parse_id_list($ids)
@@ -326,14 +300,9 @@ function htmlposts_user_can_use_html($user, $fid)
 	return htmlposts_check_permissions($group_setting, $user);
 }
 
-function htmlposts_saved_post_can_use_html(&$post)
+function htmlposts_post_can_use_html(&$post)
 {
 	global $mybb;
-
-	if(empty($post['htmlposts_authorized']))
-	{
-		return false;
-	}
 
 	if($mybb->settings['htmlposts_uids'] != '')
 	{
@@ -351,61 +320,6 @@ function htmlposts_saved_post_can_use_html(&$post)
 	}
 
 	return htmlposts_user_can_use_html($post, $post['fid']);
-}
-
-function htmlposts_schema_ready()
-{
-	global $db;
-	static $ready;
-
-	if($ready === null)
-	{
-		$ready = $db->field_exists('htmlposts_authorized', 'posts');
-	}
-
-	return $ready;
-}
-
-function htmlposts_authorize_insert(&$datahandler)
-{
-	global $mybb;
-
-	if(!htmlposts_schema_ready())
-	{
-		return;
-	}
-
-	$authorized = (int)htmlposts_user_can_use_html($mybb->user, $datahandler->data['fid']);
-	$datahandler->post_insert_data['htmlposts_authorized'] = $authorized;
-	$datahandler->post_update_data['htmlposts_authorized'] = $authorized;
-}
-
-function htmlposts_authorize_update(&$datahandler)
-{
-	global $mybb;
-
-	if(!htmlposts_schema_ready() || !isset($datahandler->data['message']))
-	{
-		return;
-	}
-
-	$datahandler->post_update_data['htmlposts_authorized'] = (int)htmlposts_user_can_use_html(
-		$mybb->user,
-		$datahandler->data['fid']
-	);
-}
-
-function htmlposts_authorize_merge(&$datahandler)
-{
-	global $db, $mybb;
-
-	if(!htmlposts_schema_ready() || empty($datahandler->pid))
-	{
-		return;
-	}
-
-	$authorized = (int)htmlposts_user_can_use_html($mybb->user, $datahandler->data['fid']);
-	$db->update_query('posts', array('htmlposts_authorized' => $authorized), 'pid='.(int)$datahandler->pid);
 }
 
 function htmlposts_prefetch_quoted_authorizations($current_pid)
@@ -434,7 +348,7 @@ function htmlposts_prefetch_quoted_authorizations($current_pid)
 		}
 
 		$query = $db->query(
-			'SELECT p.pid,p.fid,p.uid,p.htmlposts_authorized,'.
+			'SELECT p.pid,p.fid,p.uid,'.
 			'COALESCE(u.usergroup, 0) AS usergroup,'.
 			"COALESCE(u.additionalgroups, '') AS additionalgroups ".
 			'FROM '.TABLE_PREFIX.'posts p '.
@@ -444,7 +358,7 @@ function htmlposts_prefetch_quoted_authorizations($current_pid)
 		while($source_post = $db->fetch_array($query))
 		{
 			$source_authorization_cache[(int)$source_post['pid']] =
-				htmlposts_saved_post_can_use_html($source_post);
+				htmlposts_post_can_use_html($source_post);
 		}
 		$prefetched = true;
 	}
@@ -641,7 +555,7 @@ function htmlposts_parse(&$message)
 
 	$authorized = $previewpost
 		? htmlposts_user_can_use_html($mybb->user, $mypost['fid'])
-		: htmlposts_saved_post_can_use_html($mypost);
+		: htmlposts_post_can_use_html($mypost);
 
 	if(!$authorized)
 	{

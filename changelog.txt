@@ -1,9 +1,7 @@
 Unreleased
 * Preserved authorized HTML through MyBB's final parser validation step.
 * Prevented quoted raw HTML from inheriting the replying user's authorization.
-* Persisted HTML authorization per post so later group changes cannot activate old raw HTML.
-* Re-evaluate authorization when post content is edited, including quick edits and merged replies.
-* Added safe schema install, upgrade, deactivation, and uninstall handling.
+* Kept authorization dynamic so current user, group, and forum settings apply to all existing posts.
 * Normalized and cached configured IDs and fallback author group lookups.
 * Avoided undefined preview input warnings on PHP 8.
 * Replaced typed group and forum ID settings with MyBB's native selectors.
