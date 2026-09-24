@@ -3,6 +3,7 @@
 define('IN_MYBB', 1);
 define('THIS_SCRIPT', 'newreply.php');
 
+define('TABLE_PREFIX', 'mybb_');
 set_error_handler(function($severity, $message, $file, $line) {
 	throw new ErrorException($message, 0, $severity, $file, $line);
 });
@@ -21,6 +22,7 @@ class HtmlPostsTestDb
 	public $posts = array();
 	public $user_queries = 0;
 	public $post_queries = 0;
+	private $quote_rows = array();
 
 	function field_exists($field, $table)
 	{
@@ -45,8 +47,30 @@ class HtmlPostsTestDb
 		return array('table' => $table, 'where' => $where);
 	}
 
+	function query($sql)
+	{
+		++$this->post_queries;
+		$this->quote_rows = array();
+		preg_match('/p\.pid IN \(([^)]+)\)/', $sql, $matches);
+		foreach(explode(',', isset($matches[1]) ? $matches[1] : '') as $pid)
+		{
+			$pid = (int)$pid;
+			if(isset($this->posts[$pid]))
+			{
+				$this->quote_rows[] = $this->posts[$pid];
+			}
+		}
+		return array('table' => 'quote_posts');
+	}
+
+
 	function fetch_array($query)
 	{
+		if($query['table'] == 'quote_posts')
+		{
+			return empty($this->quote_rows) ? array() : array_shift($this->quote_rows);
+		}
+
 		if($query['table'] == 'posts')
 		{
 			preg_match('/pid=(\d+)/', $query['where'], $matches);
@@ -84,6 +108,7 @@ $parser = new HtmlPostsTestParser();
 $parser_options = $parser->options;
 $mybb = new stdClass();
 $mybb->input = array();
+$mybb->cookies = array('multiquote' => '40|41');
 $mybb->settings = array(
 	'htmlposts_forums' => '-1',
 	'htmlposts_uids' => '',
@@ -99,8 +124,8 @@ require dirname(__DIR__).'/Upload/inc/plugins/htmlposts.php';
 
 $db->users[40] = array('usergroup' => 4, 'additionalgroups' => '');
 $db->users[41] = array('usergroup' => 2, 'additionalgroups' => '');
-$db->posts[40] = array('pid' => 40, 'fid' => 2, 'uid' => 40, 'htmlposts_authorized' => 1);
-$db->posts[41] = array('pid' => 41, 'fid' => 2, 'uid' => 41, 'htmlposts_authorized' => 0);
+$db->posts[40] = array('pid' => 40, 'fid' => 2, 'uid' => 40, 'usergroup' => 4, 'additionalgroups' => '', 'htmlposts_authorized' => 1);
+$db->posts[41] = array('pid' => 41, 'fid' => 2, 'uid' => 41, 'usergroup' => 2, 'additionalgroups' => '', 'htmlposts_authorized' => 0);
 
 $authorized_quote = array(
 	'pid' => 40,
@@ -124,7 +149,7 @@ htmlposts_test_assert(
 $escaped_quote = $unauthorized_quote['message'];
 htmlposts_escape_quoted_html($unauthorized_quote);
 htmlposts_test_assert($unauthorized_quote['message'] === $escaped_quote, 'quote escaping is idempotent for multiquote processing');
-htmlposts_test_assert($db->post_queries === 2, 'quoted source authorization is queried once per post');
+htmlposts_test_assert($db->post_queries === 1, 'all quoted source authorizations are prefetched in one query');
 
 $normalized_ids = htmlposts_parse_id_list('4, 6, 4, , 0, -2, bad, 7x');
 htmlposts_test_assert($normalized_ids === array(4 => 4, 6 => 6), 'ID settings are normalized and invalid values are ignored');

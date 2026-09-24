@@ -503,31 +503,58 @@ function htmlposts_authorize_merge(&$datahandler)
 	$db->update_query('posts', array('htmlposts_authorized' => $authorized), 'pid='.(int)$datahandler->pid);
 }
 
+function htmlposts_prefetch_quoted_authorizations($current_pid)
+{
+	global $db, $mybb, $replyto;
+	static $source_authorization_cache = array();
+	static $prefetched = false;
+
+	if(!$prefetched)
+	{
+		$quoted_pids = array((int)$current_pid => (int)$current_pid);
+		if(!empty($replyto))
+		{
+			$quoted_pids[(int)$replyto] = (int)$replyto;
+		}
+		if(!empty($mybb->cookies['multiquote']))
+		{
+			foreach(explode('|', $mybb->cookies['multiquote']) as $quoted_pid)
+			{
+				$quoted_pid = (int)$quoted_pid;
+				if($quoted_pid > 0)
+				{
+					$quoted_pids[$quoted_pid] = $quoted_pid;
+				}
+			}
+		}
+
+		$query = $db->query(
+			'SELECT p.pid,p.fid,p.uid,p.htmlposts_authorized,'.
+			'COALESCE(u.usergroup, 0) AS usergroup,'.
+			"COALESCE(u.additionalgroups, '') AS additionalgroups ".
+			'FROM '.TABLE_PREFIX.'posts p '.
+			'LEFT JOIN '.TABLE_PREFIX.'users u ON (u.uid=p.uid) '.
+			'WHERE p.pid IN ('.implode(',', $quoted_pids).')'
+		);
+		while($source_post = $db->fetch_array($query))
+		{
+			$source_authorization_cache[(int)$source_post['pid']] =
+				htmlposts_saved_post_can_use_html($source_post);
+		}
+		$prefetched = true;
+	}
+
+	return !empty($source_authorization_cache[(int)$current_pid]);
+}
+
 function htmlposts_escape_quoted_html(&$quoted_post)
 {
-	global $db;
-	static $source_authorization_cache = array();
-
 	if(!is_array($quoted_post) || !isset($quoted_post['message']) || empty($quoted_post['pid']))
 	{
 		return $quoted_post;
 	}
 
-	$pid = (int)$quoted_post['pid'];
-	if(!isset($source_authorization_cache[$pid]))
-	{
-		$query = $db->simple_select(
-			'posts',
-			'fid,uid,htmlposts_authorized',
-			'pid='.$pid,
-			array('limit' => 1)
-		);
-		$source_post = $db->fetch_array($query);
-		$source_authorization_cache[$pid] = !empty($source_post)
-			&& htmlposts_saved_post_can_use_html($source_post);
-	}
-
-	if($source_authorization_cache[$pid])
+	if(htmlposts_prefetch_quoted_authorizations((int)$quoted_post['pid']))
 	{
 		return $quoted_post;
 	}
