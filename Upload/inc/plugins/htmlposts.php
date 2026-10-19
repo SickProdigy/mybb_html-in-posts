@@ -48,7 +48,7 @@ function htmlposts_info()
 		"website"		=> "https://github.com/sickprodigy/mybb_html-in-posts",
 		"author"		=> "Diogo Parrinha and SickProdigy",
 		"authorsite"	=> "https://www.sickgaming.net",
-		"version"		=> "1.9",
+		"version"		=> "2.0.0",
 		"guid" 			=> "1e7c24cc5352de0fbc1e7be40ef1ad60",
 		"compatibility"	=> "18*"
 	);

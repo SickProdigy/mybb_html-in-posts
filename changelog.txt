@@ -1,4 +1,4 @@
-Unreleased
+v2.0.0
 * Preserved authorized HTML through MyBB's final parser validation step.
 * Prevented quoted raw HTML from inheriting the replying user's authorization.
 * Kept authorization dynamic so current user, group, and forum settings apply to all existing posts.
